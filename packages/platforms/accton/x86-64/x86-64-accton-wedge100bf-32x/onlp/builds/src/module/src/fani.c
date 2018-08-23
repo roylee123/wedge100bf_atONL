@@ -46,6 +46,7 @@ enum fan_id {
 };
 
 #define FAN_BOARD_PATH    "/sys/bus/i2c/devices/8-0033/"
+#define FAN_BOARD_PATH_HWMON    "/sys/class/hwmon/hwmon1/device/fan%d_input"
 
 #define CHASSIS_FAN_INFO(fid)        \
     { \
@@ -103,9 +104,9 @@ onlp_fani_info_get(onlp_oid_t id, onlp_fan_info_t* info)
 
     /* get front fan rpm
      */
-    sprintf(path, "%s""fan%d_input", FAN_BOARD_PATH, fid*2 - 1);
+    sprintf(path, FAN_BOARD_PATH_HWMON, fid*2 - 1);
 
-    if (bmc_file_read_int(&value, path, 10) < 0) {
+    if (onlp_file_read_int(&value, path) < 0) {
         AIM_LOG_ERROR("Unable to read status from file (%s)\r\n", path);
         return ONLP_STATUS_E_INTERNAL;
     }    
@@ -113,9 +114,9 @@ onlp_fani_info_get(onlp_oid_t id, onlp_fan_info_t* info)
 
     /* get rear fan rpm
      */
-    sprintf(path, "%s""fan%d_input", FAN_BOARD_PATH, fid*2);
+    sprintf(path, FAN_BOARD_PATH_HWMON, fid*2);
 
-    if (bmc_file_read_int(&value, path, 10) < 0) {
+    if (onlp_file_read_int(&value, path) < 0) {
         AIM_LOG_ERROR("Unable to read status from file (%s)\r\n", path);
         return ONLP_STATUS_E_INTERNAL;
     }
