@@ -79,4 +79,7 @@
 - sysstat
 - ipmitool
 - libcurl3-gnutls
+- curl
+- python-pexpect
+- lm-sensors
 

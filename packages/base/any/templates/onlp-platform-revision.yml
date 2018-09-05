@@ -24,5 +24,6 @@ packages:
     files:
       builds/lib/$BUILD_DIR/$TOOLCHAIN/bin/libonlp-${PLATFORM}.so : ${install}/lib/
       builds/onlpdump/$BUILD_DIR/$TOOLCHAIN/bin/onlpdump : ${install}/bin/
+      script/do_bfshell.py : ${install}/bin/
 
     changelog:  Change changes changes.,
