@@ -19,9 +19,6 @@
 [submodule "sm/build-artifacts"]
 	path = sm/build-artifacts
         url = http://github.com/opennetworklinux/build-artifacts
-[submodule "packages/platforms/accton/x86-64/x86-64-accton-wedge100bf-65x/onlp/builds/sde"]
-	path = packages/platforms/accton/x86-64/x86-64-accton-wedge100bf-65x/onlp/builds/sde
-	url = https://github.com/roylee123/bf_wedge100_sde_binary.git
-[submodule "packages/platforms/accton/x86-64/x86-64-accton-wedge100bf-32x/onlp/builds/sde"]
-	path = packages/platforms/accton/x86-64/x86-64-accton-wedge100bf-32x/onlp/builds/sde
+[submodule "builds/amd64/rootfs/builds/sde"]
+	path = builds/amd64/rootfs/builds/sde
 	url = https://github.com/roylee123/bf_wedge100_sde_binary.git
