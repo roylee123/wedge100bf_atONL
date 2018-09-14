@@ -143,19 +143,19 @@ onlp_led_mode_to_reg_value(enum onlp_led_id id, onlp_led_mode_t onlp_led_mode)
 int
 onlp_ledi_info_get(onlp_oid_t id, onlp_led_info_t* info)
 {
-    int  lid, value;
+    int  lid, value, ret;
+    uint8_t data;
 
     VALIDATE(id);
     lid = ONLP_OID_ID_GET(id);
 
     /* Set the onlp_oid_hdr_t and capabilities */
     *info = linfo[ONLP_OID_ID_GET(id)];
-
-    value = onlp_i2c_readb(led_addr[lid].bus, led_addr[lid].devaddr, led_addr[lid].offset, ONLP_I2C_F_FORCE);
-    if (value < 0) {
+    ret = _cpld_read_byte(led_addr[lid].offset, &data);
+    if (ret < 0) {
         return ONLP_STATUS_E_INTERNAL;
     }
-
+    value = (int)data;
     info->mode = reg_value_to_onlp_led_mode(lid, value);
 
     /* Set the on/off status */
@@ -196,13 +196,17 @@ onlp_ledi_set(onlp_oid_t id, int on_or_off)
 int
 onlp_ledi_mode_set(onlp_oid_t id, onlp_led_mode_t mode)
 {
-    int  lid, value;    
+    int  lid, ret, value;
+    uint8_t data;
 
     VALIDATE(id);
     lid = ONLP_OID_ID_GET(id);
 
     value = onlp_led_mode_to_reg_value(lid, mode);
-    if (onlp_i2c_writeb(led_addr[lid].bus, led_addr[lid].devaddr, led_addr[lid].offset, value, ONLP_I2C_F_FORCE) < 0) {
+    data = value;
+    ret = _cpld_write_byte(led_addr[lid].offset, data);
+
+    if (ret < 0) {
         return ONLP_STATUS_E_INTERNAL;
     }
 

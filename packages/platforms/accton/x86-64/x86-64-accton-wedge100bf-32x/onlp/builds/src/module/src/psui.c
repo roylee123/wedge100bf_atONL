@@ -60,28 +60,30 @@ onlp_psui_init(void)
 
 #define PMBUS_PATH_FORMAT "/sys/class/hwmon/hwmon1/device/%s%d_input"
 
+
 int
 onlp_psui_info_get(onlp_oid_t id, onlp_psu_info_t* info)
 {
-    int pid, value, addr, pid_in, pid_out;
-    
+    int pid, value, addr, pid_in, pid_out, ret;
+    uint8_t data;
     uint8_t mask = 0;
 	char  path[64] = {0};
 
     VALIDATE(id);
 
     pid  = ONLP_OID_ID_GET(id);
+
     *info = pinfo[pid]; /* Set the onlp_oid_hdr_t */
 
     /* Get the present status
      */
     mask = 1 << ((pid-1) * 4);
-    value = onlp_i2c_readb(1, 0x32, 0x10, ONLP_I2C_F_FORCE);
-    if (value < 0) {
+    ret = _cpld_read_byte(0x10, &data);
+    if (ret < 0) {
         return ONLP_STATUS_E_INTERNAL;
     }
 
-    if (value & mask) {
+    if (data & mask) {
         info->status &= ~ONLP_PSU_STATUS_PRESENT;
         return ONLP_STATUS_OK;
     }
@@ -91,7 +93,7 @@ onlp_psui_info_get(onlp_oid_t id, onlp_psu_info_t* info)
     /* Get power good status 
      */
     mask = 1 << ((pid-1) * 4 + 1);
-    if (!(value & mask)) {
+    if (!(data & mask)) {
         info->status |= ONLP_PSU_STATUS_FAILED;
         return ONLP_STATUS_OK;
     }
@@ -103,10 +105,17 @@ onlp_psui_info_get(onlp_oid_t id, onlp_psu_info_t* info)
     if (bmc_i2c_writeb(7, 0x70, 0, value) < 0) {
         return ONLP_STATUS_E_INTERNAL;
     }
+    /* Get model name */
+    addr  = (pid == PSU1_ID) ? 0x59 : 0x5a;
+    ret = bmc_i2c_readraw(7, addr, 0x9a, info->model, sizeof(info->model));
+    if (ret < 0) {
+        AIM_LOG_ERROR("Unable to read status from file (%s)\r\n", path);
+        return ONLP_STATUS_E_INTERNAL;
+    }
+
 
     pid_in  = (pid==PSU1_ID)? 1: 3;
     pid_out = (pid==PSU1_ID)? 2: 4;    
-
     /* Read vin */
     sprintf(path, PMBUS_PATH_FORMAT, "in", pid_in);
     if (onlp_file_read_int(&value, path) < 0) {
@@ -173,9 +182,7 @@ onlp_psui_info_get(onlp_oid_t id, onlp_psu_info_t* info)
         info->caps |= ONLP_PSU_CAPS_POUT;
     }
 
-    /* Get model name */
-    addr  = (pid == PSU1_ID) ? 0x59 : 0x5a;
-    return bmc_i2c_readraw(7, addr, 0x9a, info->model, sizeof(info->model));
+    return ONLP_STATUS_OK;
 }
 
 int

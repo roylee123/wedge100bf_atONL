@@ -64,6 +64,10 @@ int bmc_i2c_writeb(uint8_t bus, uint8_t devaddr, uint8_t addr, uint8_t value);
 int bmc_i2c_readw(uint8_t bus, uint8_t devaddr, uint8_t addr);
 int bmc_i2c_readraw(uint8_t bus, uint8_t devaddr, uint8_t addr, char* data, int data_size);
 
-#endif  /* __PLATFORM_LIB_H__ */
 
+int _run_shell_cmd(char* cmd, char* out, int max);
+int _cpld_write_byte(uint8_t offset, uint8_t data);
+int _cpld_read_byte(uint8_t offset, uint8_t *data);
+
+#endif  /* __PLATFORM_LIB_H__ */
 
