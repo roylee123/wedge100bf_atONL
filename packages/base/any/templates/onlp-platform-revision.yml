@@ -27,5 +27,6 @@ packages:
 
     optional-files:
       script/do_bfshell.py : ${install}/bin/
+      script/onlp_sfp_poll.py : ${install}/bin/
 
     changelog:  Change changes changes.,
