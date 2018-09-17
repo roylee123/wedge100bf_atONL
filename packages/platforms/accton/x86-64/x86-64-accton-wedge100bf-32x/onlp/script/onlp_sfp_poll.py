@@ -328,7 +328,7 @@ def main():
     ap.add_argument("-p", dest="port_index", help="Which port", type=int)  
     ap.add_argument("-addr", dest="cpld_offset", help="Address to access", type=str)  
     ap.add_argument("-data", dest="cpld_data", help="data to write", type=str)    
-    ap.add_argument("subcmd")   
+    ap.add_argument("subcmd", help="presence/eeprom/cpldr/cpldw/clean")
     
     ops = ap.parse_args()    
     program = os.environ.get('_')
