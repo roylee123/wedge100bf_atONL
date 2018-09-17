@@ -19,7 +19,6 @@ packages:
       builds/rootfs-$ARCH.cpio.gz : $$PKG_INSTALL/
       builds/rootfs-$ARCH.sqsh : $$PKG_INSTALL/
       builds/manifest.json : $$PKG_INSTALL/
-      builds/sde/8.2.0-1/bfpkgSdeBsp-8.2.0-1.deb : $$PKG_INSTALL/
 
     changelog:  Change changes changes.,
 
