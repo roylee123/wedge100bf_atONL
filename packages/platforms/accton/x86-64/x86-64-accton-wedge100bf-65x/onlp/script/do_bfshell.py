@@ -19,7 +19,8 @@ def main():
         sys.exit(2)
 
     commands = []
-    bfshell_path = '/opt/bfn/install/bin/bfshell'
+    bfshell_path = '/usr/local/barefoot/bin/bfshell'
+    #bfshell_path = '/opt/bfn/install/bin/bfshell'
     bfshell_cmd = [ bfshell_path ]
     for o, a in opts:
         if o == '-a':
