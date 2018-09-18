@@ -58,48 +58,32 @@ onlp_psui_init(void)
     return ONLP_STATUS_OK;
 }
 
-static int
-twos_complement_to_int(uint16_t data, uint8_t valid_bit, int mask)
-{
-    uint16_t valid_data = data & mask;
-    bool is_negative = valid_data >> (valid_bit - 1);
+#define PMBUS_PATH_FORMAT "/sys/class/hwmon/hwmon1/device/%s%d_input"
 
-    return is_negative ? (-(((~valid_data) & mask) + 1)) : valid_data;
-}
-
-static int
-pmbus_parse_literal_format(uint16_t value)
-{
-    int exponent, mantissa, multiplier = 1000;
-
-    exponent = twos_complement_to_int(value >> 11, 5, 0x1f);
-    mantissa = twos_complement_to_int(value & 0x7ff, 11, 0x7ff);
-
-    return (exponent >= 0) ? (mantissa << exponent) * multiplier :
-                             (mantissa * multiplier) / (1 << -exponent);
-}
 
 int
 onlp_psui_info_get(onlp_oid_t id, onlp_psu_info_t* info)
 {
-    int pid, value, addr;
-    
+    int pid, value, addr, pid_in, pid_out, ret;
+    uint8_t data;
     uint8_t mask = 0;
+	char  path[64] = {0};
 
     VALIDATE(id);
 
     pid  = ONLP_OID_ID_GET(id);
+
     *info = pinfo[pid]; /* Set the onlp_oid_hdr_t */
 
     /* Get the present status
      */
     mask = 1 << ((pid-1) * 4);
-    value = onlp_i2c_readb(1, 0x32, 0x10, ONLP_I2C_F_FORCE);
-    if (value < 0) {
+    ret = _cpld_read_byte(0x10, &data);
+    if (ret < 0) {
         return ONLP_STATUS_E_INTERNAL;
     }
 
-    if (value & mask) {
+    if (data & mask) {
         info->status &= ~ONLP_PSU_STATUS_PRESENT;
         return ONLP_STATUS_OK;
     }
@@ -109,7 +93,7 @@ onlp_psui_info_get(onlp_oid_t id, onlp_psu_info_t* info)
     /* Get power good status 
      */
     mask = 1 << ((pid-1) * 4 + 1);
-    if (!(value & mask)) {
+    if (!(data & mask)) {
         info->status |= ONLP_PSU_STATUS_FAILED;
         return ONLP_STATUS_OK;
     }
@@ -121,50 +105,84 @@ onlp_psui_info_get(onlp_oid_t id, onlp_psu_info_t* info)
     if (bmc_i2c_writeb(7, 0x70, 0, value) < 0) {
         return ONLP_STATUS_E_INTERNAL;
     }
-
-    /* Read vin */
+    /* Get model name */
     addr  = (pid == PSU1_ID) ? 0x59 : 0x5a;
-    value = bmc_i2c_readw(7, addr, 0x88);
-    if (value >= 0) {
-        info->mvin = pmbus_parse_literal_format(value);
+    ret = bmc_i2c_readraw(7, addr, 0x9a, info->model, sizeof(info->model));
+    if (ret < 0) {
+        AIM_LOG_ERROR("Unable to read status from file (%s)\r\n", path);
+        return ONLP_STATUS_E_INTERNAL;
+    }
+
+
+    pid_in  = (pid==PSU1_ID)? 1: 3;
+    pid_out = (pid==PSU1_ID)? 2: 4;    
+    /* Read vin */
+    sprintf(path, PMBUS_PATH_FORMAT, "in", pid_in);
+    if (onlp_file_read_int(&value, path) < 0) {
+        AIM_LOG_ERROR("Unable to read status from file (%s)\r\n", path);
+        return ONLP_STATUS_E_INTERNAL;
+    }
+    
+    if (value >= 1000) {
+        info->mvin = value;
         info->caps |= ONLP_PSU_CAPS_VIN;
     }
 
     /* Read iin */
-    value = bmc_i2c_readw(7, addr, 0x89);
+    sprintf(path, PMBUS_PATH_FORMAT, "curr", pid_in);
+    if (onlp_file_read_int(&value, path) < 0) {
+        AIM_LOG_ERROR("Unable to read status from file (%s)\r\n", path);
+        return ONLP_STATUS_E_INTERNAL;
+    }
     if (value >= 0) {
-        info->miin = pmbus_parse_literal_format(value);
+        info->miin = value;
         info->caps |= ONLP_PSU_CAPS_IIN;
     }
 
     /* Get pin */
-    if ((info->caps & ONLP_PSU_CAPS_VIN) && (info->caps & ONLP_PSU_CAPS_IIN)) {
-        info->mpin = info->mvin * info->miin / 1000;
+    sprintf(path, PMBUS_PATH_FORMAT, "power", pid_in);
+    if (onlp_file_read_int(&value, path) < 0) {
+        AIM_LOG_ERROR("Unable to read status from file (%s)\r\n", path);
+        return ONLP_STATUS_E_INTERNAL;
+    }    
+    if (value >= 0) {
+        info->mpin = value;
         info->caps |= ONLP_PSU_CAPS_PIN;
+    }
+    /* Get vout */
+    sprintf(path, PMBUS_PATH_FORMAT, "in", pid_out);
+    if (onlp_file_read_int(&value, path) < 0) {
+        AIM_LOG_ERROR("Unable to read status from file (%s)\r\n", path);
+        return ONLP_STATUS_E_INTERNAL;
+    }    
+    if (value >= 0) {            
+            info->mvout = value;
+            info->caps |= ONLP_PSU_CAPS_VOUT;
     }
 
     /* Read iout */
-    value = bmc_i2c_readw(7, addr, 0x8c);
+    sprintf(path, PMBUS_PATH_FORMAT, "curr", pid_out);
+    if (onlp_file_read_int(&value, path) < 0) {
+        AIM_LOG_ERROR("Unable to read status from file (%s)\r\n", path);
+        return ONLP_STATUS_E_INTERNAL;
+    }
     if (value >= 0) {
-        info->miout = pmbus_parse_literal_format(value);
+        info->miout = value;
         info->caps |= ONLP_PSU_CAPS_IOUT;
     }
 
     /* Read pout */
-    value = bmc_i2c_readw(7, addr, 0x96);
+    sprintf(path, PMBUS_PATH_FORMAT, "power", pid_out);
+    if (onlp_file_read_int(&value, path) < 0) {
+        AIM_LOG_ERROR("Unable to read status from file (%s)\r\n", path);
+        return ONLP_STATUS_E_INTERNAL;
+    }  
     if (value >= 0) {
-        info->mpout = pmbus_parse_literal_format(value);
+        info->mpout = value;
         info->caps |= ONLP_PSU_CAPS_POUT;
     }
 
-    /* Get vout */
-    if ((info->caps & ONLP_PSU_CAPS_IOUT) && (info->caps & ONLP_PSU_CAPS_POUT) && info->miout != 0) {
-            info->mvout = info->mpout / info->miout * 1000;
-            info->caps |= ONLP_PSU_CAPS_VOUT;
-    }
-
-    /* Get model name */
-    return bmc_i2c_readraw(7, addr, 0x9a, info->model, sizeof(info->model));
+    return ONLP_STATUS_OK;
 }
 
 int

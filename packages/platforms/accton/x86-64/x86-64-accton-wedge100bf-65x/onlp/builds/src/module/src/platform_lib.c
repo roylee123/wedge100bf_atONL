@@ -249,3 +249,62 @@ bmc_i2c_readraw(uint8_t bus, uint8_t devaddr, uint8_t addr, char* data, int data
     return 0;    
 }
 
+int _run_shell_cmd(char* cmd, char* out, int max)
+{
+    FILE * fp;
+    int ret = 0;
+
+    if ((fp = popen(cmd, "r")) == NULL)
+    {
+        perror("open failed!");
+        return -1;
+    }
+
+    //num = fread(out, 1, max, fp);
+    if (fgets(out, max, fp) != NULL) {
+        ;
+    } else {
+        ret = ONLP_STATUS_E_INVALID;
+    }
+
+    if (pclose(fp) == -1)
+    {
+        perror("close failed!");
+        return ONLP_STATUS_E_INTERNAL;
+    }
+    return ret;
+}
+
+int
+_cpld_write_byte(uint8_t offset, uint8_t data)
+{
+    int ret;
+    char cmd[64], buf[8];
+    char prefix[] = "onlp_sfp_poll.py cpldr -addr 0x%x -data 0x%x";
+
+    sprintf(cmd, prefix, offset, data);
+    ret = _run_shell_cmd(cmd, buf, sizeof(buf));
+    if (ret != 0) {
+        return ONLP_STATUS_E_INTERNAL;
+    }
+    return ONLP_STATUS_OK;
+}
+
+
+int
+_cpld_read_byte(uint8_t offset, uint8_t *data)
+{
+    int ret;
+    char cmd[64], buf[8];
+    char prefix[] = "onlp_sfp_poll.py cpldr -addr 0x%x";
+
+    sprintf(cmd, prefix, offset);
+    ret = _run_shell_cmd(cmd, buf, sizeof(buf));
+    *data = buf[0];
+    if (ret != 0) {
+        return ONLP_STATUS_E_INTERNAL;
+    }
+    return ONLP_STATUS_OK;
+}
+
+
