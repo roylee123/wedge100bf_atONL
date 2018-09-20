@@ -10,6 +10,7 @@ import argparse
 import logging
 import fcntl
 import subprocess
+import json
 from functools import wraps
 
 logger = None
@@ -19,12 +20,16 @@ logger.setLevel(logging.INFO)
 
 CACHE_FILE = "/tmp/.OnlSfps.cache."
 PORT_NUM = 32 
+PSU_NUM = 2
 g_dist_codename = os.popen('cat /etc/onl/platform').read().strip() 
 #g_dist_codename = os.popen('cat ./platform').read().strip()
 
 INIT_EEPROM = {'time':0, 'data':'','interval': 5}
 DATA = {'is_UpToDate': False,
         'port_num': PORT_NUM,
+        'psu': {'is_UpToDate': False,
+                  1: {'time':0, 'name':0, 'interval': 5},
+                  2: {'time':0, 'name':0, 'interval': 5}},
         'presence': {'time':0, 'bitmap':0, 'interval': 5},
         'eeprom' : {0:{'time':0, 'data':'','interval': 5}},
         }
@@ -135,6 +140,31 @@ class OnlSfp(object):
             return True, last
         else:
             return False, now 
+
+    def get_psu(self, id):
+        global DATA    
+        name = ""
+        last = DATA['psu'][id]['time']    
+        interval = DATA['psu'][id]['interval']            
+        ret, DATA['psu'][id]['time'] = self.is_upToDate(last, interval)
+        if ret == True:
+            DATA['psu'][id]['is_UpToDate'] = True
+            return True
+        else:
+            DATA['psu'][id]['is_UpToDate'] = False
+            cmd = 'curl -g -6 http://[fe80::1%s25usb0]:8080/api/sys/bmc/ps/%d'
+            st, log = self._syscmd(cmd % ('%',id))
+            if st != 0:
+                return False
+            log = log[log.find('{'):]
+            jt = json.loads(log)
+            name = jt['Information']['Description'][9] 
+            if len(name) == 0:        
+                return False
+            else:
+                DATA['psu'][id]['name'] = name
+                DATA['psu'][id]['is_UpToDate'] = True
+                return True
         
     def get_present(self):
         global DATA    
@@ -281,7 +311,18 @@ def _is_port_valid(port):
     if port < 0 or port >=PORT_NUM:
         return False
     return True    
-    
+
+def check_psu(func):
+    def check(*args):
+        if len(args) == 0:
+            return False
+        id = args[0]
+        if id == 0 or id > PSU_NUM:
+            return False
+        return func(*args)
+    return check
+
+   
 def check_port(func):
     def check(*args):
         if len(args) == 0:
@@ -290,6 +331,15 @@ def check_port(func):
             return False
         return func(*args)
     return check
+
+@check_psu
+def poll_psu(id):
+    pm = OnlSfp()
+    pm.load()
+    ret = pm.get_psu(id)
+    if DATA['psu'][id]['is_UpToDate'] == False:
+        pm.save()
+    return ret
  
 def poll_presence():
     pm = OnlSfp()
@@ -352,16 +402,25 @@ def main():
         if offset == None:        
             return
         data = ''
-	if 'cpld_data' in ops:
+        if 'cpld_data' in ops:
             data = ops.cpld_data
-
-        cpld = OnlCpld(ops.subcmd)        
-        ret, data = cpld.access(offset, data)
-        if ret == True and ops.subcmd == 'cpldr':
-            print data
+            cpld = OnlCpld(ops.subcmd)        
+            ret, data = cpld.access(offset, data)
+            if ret == True and ops.subcmd == 'cpldr':
+                print data
         return        
        
     port = ops.port_index
+    if ops.subcmd=='psu':
+        if port == None:
+            print "Cannot print all PSU"    
+        ret = poll_psu(port)
+        name = DATA['psu'][port]['name']
+        if ret == True:
+            if len(name) != 0:
+                print name 
+        return
+
     if ops.subcmd=='presence':
         ret, bitmap = poll_presence()
         if ret == True:
