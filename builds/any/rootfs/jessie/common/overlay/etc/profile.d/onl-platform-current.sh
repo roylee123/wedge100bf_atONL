@@ -11,7 +11,13 @@ export PATH="$PATH:$dir/bin:$dir/sbin:$dir/lib/bin:$dir/lib/sbin"
 #sole for wedge100bf
 #################################################
 depmod
-modprobe accton_wedge100bf_psensor model_id=1
+pm=`cat /etc/onl/platform`
+grep 65x $pm &> /dev/null
+if [ $? ]; then
+    modprobe accton_wedge100bf_psensor
+else
+    modprobe accton_wedge100bf_psensor model_id=1
+fi
 
 ifconfig usb0 up
 . /usr/local/barefoot/sbin/setup_switch.sh
