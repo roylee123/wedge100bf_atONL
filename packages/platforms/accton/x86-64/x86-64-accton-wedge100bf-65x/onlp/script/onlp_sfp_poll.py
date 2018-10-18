@@ -10,6 +10,7 @@ import argparse
 import logging
 import fcntl
 import subprocess
+import json
 from functools import wraps
 
 logger = None
@@ -19,14 +20,19 @@ logger.setLevel(logging.INFO)
 
 CACHE_FILE = "/tmp/.OnlSfps.cache."
 PORT_NUM = 65
+PSU_NUM = 2
 g_dist_codename = os.popen('cat /etc/onl/platform').read().strip() 
 #g_dist_codename = os.popen('cat ./platform').read().strip()
 
 INIT_EEPROM = {'time':0, 'data':'','interval': 5}
 DATA = {'is_UpToDate': False,
         'port_num': PORT_NUM,
+        'psu': {'is_UpToDate': False,
+                  1: {'time':0, 'name':0, 'interval': 5},
+                  2: {'time':0, 'name':0, 'interval': 5}},
         'presence': {'time':0, 'bitmap':0, 'interval': 5},
         'eeprom' : {0:{'time':0, 'data':'','interval': 5}},
+        'syseeprom' : {'time':0, 'data':'','interval': 600}, #constant data 
         }
 
 def usage():
@@ -91,8 +97,10 @@ class OnlCpld(object):
         return ret, byte
 
 
+
 class OnlSfp(object):
     BFCMD = "do_bfshell.py -c ucli -c .. -c .. -c bf_pltfm -c qsfp -c "
+    CPCMD = "do_bfshell.py -c ucli -c .. -c .. -c bf_pltfm -c cp2112 -c "
     EEPROM_BYTES = 256
     cache_file = ""
 
@@ -135,7 +143,57 @@ class OnlSfp(object):
             return True, last
         else:
             return False, now 
+
+    def get_psu(self, id):
+        global DATA
+        name = ""
+        last = DATA['psu'][id]['time']
+        interval = DATA['psu'][id]['interval']
+        ret, DATA['psu'][id]['time'] = self.is_upToDate(last, interval)
+        if ret == True:
+            DATA['psu'][id]['is_UpToDate'] = True
+            return True
+        else:
+            DATA['psu'][id]['is_UpToDate'] = False
+            cmd = 'curl -g -6 http://[fe80::1%s25usb0]:8080/api/sys/bmc/ps/%d'
+            st, log = self._syscmd(cmd % ('%',id))
+            if st != 0:
+                return False
+            log = log[log.find('{'):]
+            jt = json.loads(log)
+            name = jt['Information']['Description'][9]
+            if len(name) == 0:
+                return False
+            else:
+                DATA['psu'][id]['name'] = name
+                DATA['psu'][id]['is_UpToDate'] = True
+                return True
+
+
+    def get_syseeprom(self):
+        global DATA    
+        last = DATA['syseeprom']['time']    
+        interval = DATA['syseeprom']['interval']            
+        ret, DATA['syseeprom']['time'] = self.is_upToDate(last, interval)
+        if ret == False:
+            subcmd = "write 0 0xe8 1 0x40; write 0 0xa0 2 0 0;read 0 0xa0 ff"
+            cmd = self.CPCMD + "\'" + subcmd + "\'"    
+            st, log = self._syscmd(cmd)
+            if st != 0:
+                return False
+            lines = log.splitlines()
+            last = lines[-1].strip()
+            raw = last.split()
+            hex = []
+            for byte in raw:
+                hex.append(chr(int(byte,16)))
+	    #Due to bfshell can only dump 255 Byte at most, pad to 256.
+            hex.append(chr(255))
+            data = ''.join(hex)
+            DATA['syseeprom']['data'] = data 
+        return True
         
+
     def get_present(self):
         global DATA    
         last = DATA['presence']['time']    
@@ -159,7 +217,7 @@ class OnlSfp(object):
             
             DATA['presence']['bitmap'] = bitmap[::-1]
         return True
-        
+
     def load(self, rebuildcache=False):
         global DATA
         CACHE = self.cache_file
@@ -274,6 +332,14 @@ class OnlSfp(object):
                     
         self.poll_all_eeprom()
         return DATA['eeprom'][port]['data']
+
+def poll_syseeprom():
+    pm = OnlSfp()
+    pm.load()
+    ret = pm.get_syseeprom()
+    if ret == True:
+        pm.save()
+    return ret, DATA['syseeprom']['data']
  
 def _is_port_valid(port):
     if port == None:
@@ -281,7 +347,17 @@ def _is_port_valid(port):
     if port < 0 or port >=PORT_NUM:
         return False
     return True    
-    
+
+def check_psu(func):
+    def check(*args):
+        if len(args) == 0:
+            return False
+        id = args[0]
+        if id == 0 or id > PSU_NUM:
+            return False
+        return func(*args)
+    return check
+
 def check_port(func):
     def check(*args):
         if len(args) == 0:
@@ -291,6 +367,15 @@ def check_port(func):
         return func(*args)
     return check
  
+@check_psu
+def poll_psu(id):
+    pm = OnlSfp()
+    pm.load()
+    ret = pm.get_psu(id)
+    if DATA['psu'][id]['is_UpToDate'] == False:
+        pm.save()
+    return ret
+
 def poll_presence():
     pm = OnlSfp()
     pm.load()
@@ -328,7 +413,7 @@ def main():
     ap.add_argument("-p", dest="port_index", help="Which port", type=int)  
     ap.add_argument("-addr", dest="cpld_offset", help="Address to access", type=str)  
     ap.add_argument("-data", dest="cpld_data", help="data to write", type=str)    
-    ap.add_argument("subcmd", help="presence/eeprom/cpldr/cpldw/clean")
+    ap.add_argument("subcmd", help="presence/eeprom/syseeprom/cpldr/cpldw/clean")
     
     ops = ap.parse_args()    
     program = os.environ.get('_')
@@ -347,6 +432,14 @@ def main():
             print "Cache(%s) removed!" % file
         return
 
+    if ops.subcmd=='syseeprom':
+        ret, data = poll_syseeprom()
+        if ret == True:
+            #print data,   #this will output newline at the end. 
+            sys.stdout.write(data)
+        return        
+
+
     if ops.subcmd == 'cpldw' or ops.subcmd == 'cpldr':    
         offset = ops.cpld_offset
         if offset == None:        
@@ -362,6 +455,16 @@ def main():
         return        
        
     port = ops.port_index
+    if ops.subcmd=='psu':
+        if port == None:
+            print "Cannot print all PSU"
+        ret = poll_psu(port)
+        name = DATA['psu'][port]['name']
+        if ret == True:
+            if len(name) != 0:
+                print name
+        return
+
     if ops.subcmd=='presence':
         ret, bitmap = poll_presence()
         if ret == True:
