@@ -37,7 +37,7 @@
     #define DEBUG_PRINT(fmt, args...)
 #endif
 
-#define CHASSIS_FAN_COUNT     5
+#define CHASSIS_FAN_COUNT     10
 #define CHASSIS_THERMAL_COUNT 8
 #define CHASSIS_LED_COUNT     2
 #define CHASSIS_PSU_COUNT     2

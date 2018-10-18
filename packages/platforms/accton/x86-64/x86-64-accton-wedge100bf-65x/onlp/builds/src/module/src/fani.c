@@ -43,6 +43,11 @@ enum fan_id {
     FAN_3_ON_FAN_BOARD,
     FAN_4_ON_FAN_BOARD,
     FAN_5_ON_FAN_BOARD,
+    FAN_6_ON_FAN_BOARD,
+    FAN_7_ON_FAN_BOARD,
+    FAN_8_ON_FAN_BOARD,
+    FAN_9_ON_FAN_BOARD,
+    FAN_10_ON_FAN_BOARD,    
 };
 
 #define FAN_BOARD_PATH    "/sys/bus/i2c/devices/8-0033/"
@@ -65,7 +70,12 @@ onlp_fan_info_t finfo[] = {
     CHASSIS_FAN_INFO(2),
     CHASSIS_FAN_INFO(3),
     CHASSIS_FAN_INFO(4),
-    CHASSIS_FAN_INFO(5)
+    CHASSIS_FAN_INFO(5),
+    CHASSIS_FAN_INFO(6),
+    CHASSIS_FAN_INFO(7),
+    CHASSIS_FAN_INFO(8),
+    CHASSIS_FAN_INFO(9),
+    CHASSIS_FAN_INFO(10)
 };
 
 /*

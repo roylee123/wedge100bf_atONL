@@ -58,13 +58,31 @@ onlp_psui_init(void)
     return ONLP_STATUS_OK;
 }
 
+
+static int
+onlp_get_psu_model_name(int pid, char* name, int max)
+{
+
+    int ret;
+    char cmd[64];
+    char prefix[] = "onlp_sfp_poll.py psu -p %d";
+    
+    sprintf(cmd, prefix, pid);
+    ret = _run_shell_cmd(cmd, name, max - 1);
+    if (ret != 0) {
+        return ONLP_STATUS_E_INTERNAL;
+    }
+    return ONLP_STATUS_OK;
+}
+
+  
 #define PMBUS_PATH_FORMAT "/sys/class/hwmon/hwmon1/device/%s%d_input"
 
 
 int
 onlp_psui_info_get(onlp_oid_t id, onlp_psu_info_t* info)
 {
-    int pid, value, addr, pid_in, pid_out, ret;
+    int pid, value, pid_in, pid_out, ret;
     uint8_t data;
     uint8_t mask = 0;
 	char  path[64] = {0};
@@ -98,21 +116,12 @@ onlp_psui_info_get(onlp_oid_t id, onlp_psu_info_t* info)
         return ONLP_STATUS_OK;
     }
 
-
-    /* Get input output power status
-     */
-    value = (pid == PSU1_ID) ? 0x2 : 0x1; /* mux channel for psu */
-    if (bmc_i2c_writeb(7, 0x70, 0, value) < 0) {
-        return ONLP_STATUS_E_INTERNAL;
-    }
     /* Get model name */
-    addr  = (pid == PSU1_ID) ? 0x59 : 0x5a;
-    ret = bmc_i2c_readraw(7, addr, 0x9a, info->model, sizeof(info->model));
+    ret = onlp_get_psu_model_name(pid, info->model, sizeof(info->model));
     if (ret < 0) {
-        AIM_LOG_ERROR("Unable to read status from file (%s)\r\n", path);
+        AIM_LOG_ERROR("Unable to read model name for pid:%d.\r\n", pid);
         return ONLP_STATUS_E_INTERNAL;
     }
-
 
     pid_in  = (pid==PSU1_ID)? 1: 3;
     pid_out = (pid==PSU1_ID)? 2: 4;    

@@ -47,13 +47,14 @@ int
 onlp_sysi_onie_data_get(uint8_t** data, int* size)
 {
     uint8_t* rdata = aim_zmalloc(256);
-    if(onlp_file_read(rdata, 256, size, IDPROM_PATH) == ONLP_STATUS_OK) {
-        if(*size == 256) {
-            *data = rdata;
-            return ONLP_STATUS_OK;
-        }
-    }
+    int ret;
+    char cmd[] = "onlp_sfp_poll.py syseeprom";
 
+    ret = _run_shell_cmd(cmd, (char*)rdata, 256);
+    if (ret == 0) {
+        *data = rdata;
+        return ONLP_STATUS_OK;
+    }
     aim_free(rdata);
     *size = 0;
     return ONLP_STATUS_E_INTERNAL;
